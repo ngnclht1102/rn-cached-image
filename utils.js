@@ -14,3 +14,18 @@ export function getPath (uri, immutable) {
     return BASE_DIR + '/' + randomName() + randomName() + '-' + randomName() + '-' + randomName() + '-' + randomName() + '-' + randomName() + randomName() + randomName() + ext
   }
 }
+export async function cacheValid(path, maxAgeInHours) {
+  try {
+    const existed = await RNFetchBlob.fs.exists(path)
+    stats = await RNFetchBlob.fs.stat(path)
+    const ageInHours = Math.floor((Date.now() - stats.lastModified )) /1000 / 3600
+    console.log('maxAgeInHours < ageInHours: '+ maxAgeInHours + '  ' + ageInHours)
+    if (maxAgeInHours < ageInHours) {
+      await RNFetchBlob.fs.unlink(path)
+      return false
+    }
+    return existed
+  } catch (e) {
+    return false
+  }
+}

@@ -8,8 +8,9 @@ import React, { Component } from 'react'
 import PropTypes from 'prop-types'
 import RNFetchBlob from 'react-native-fetch-blob'
 import { Animated, Image, View } from 'react-native'
-import { getPath } from './utils'
+import { cacheValid, getPath } from './utils'
 import animationTypes from './animation.type'
+import styles from './styles'
 
 export default class RnCachedImage extends Component {
   static propTypes = {
@@ -29,7 +30,9 @@ export default class RnCachedImage extends Component {
     placeholderColor: PropTypes.string, // one of explode, fade, shrink
     shouldCachedImage: PropTypes.bool, // only applied when should cache image is enable
     immutableCachedImage: PropTypes.bool, // only applied when should cache image is enable
-    delay: PropTypes.number // increase the loading time by miliseconds
+    delay: PropTypes.number, // increase the loading time by miliseconds
+    reuseView: PropTypes.bool, // use only if you intergrate with recycle listview
+    maxAgeInHours: PropTypes.number // max age of the cached file
   };
 
   static defaultProps = {
@@ -39,7 +42,8 @@ export default class RnCachedImage extends Component {
     placeholderColor: 'gray',
     shouldCachedImage: false,
     immutableCachedImage: true,
-    delay: 500
+    delay: 500,
+    maxAgeInHours: 168 // 7 days
   };
 
   static getSize (...args) {
@@ -96,20 +100,24 @@ export default class RnCachedImage extends Component {
   // when we use it in recycle listview, this component will not start over it's lifecycle
   // it just received new props and do some update instead
   componentWillReceiveProps (nextProps) {
-    this.resetState(() => {
-      if (this.props.shouldCachedImage) {
-        this.download()
-      } else {
-        this.startLoopAnimationForHolderSpinner()
-      }
-    })
+    if (this.props.reuseView)
+      this.resetState(() => {
+        if (this.props.shouldCachedImage) {
+          this.download()
+        } else {
+          this.startLoopAnimationForHolderSpinner()
+        }
+      })
   }
 
   async download () {
     const { uri } = this.props.source
-    if (!uri) return
+    if (!uri || uri == 'null') {
+      this.onError()
+      return
+    }
     const path = getPath(uri, this.props.immutableCachedImage)
-    this.imageExisted = await RNFetchBlob.fs.exists(path)
+    this.imageExisted = await cacheValid(path, this.props.maxAgeInHours)
     if (!this.imageExisted) this.startLoopAnimationForHolderSpinner()
     else {
       console.log('[image caching] image existed', path)
@@ -130,7 +138,7 @@ export default class RnCachedImage extends Component {
     }
   }
 
-  onDownloaded = (path) => this.setState({ path }, this.onLoadEnded)
+  onDownloaded = (path) => !!path && this.setState({ path }, this.onLoadEnded)
 
   onLoadEnded = () => {
     if (this.ended) return
@@ -241,9 +249,24 @@ export default class RnCachedImage extends Component {
   render () {
     const { isLoading, shouldCachedImage } = this.state
     const { placeholderSource, placeholderColor } = this.props
+    if (this.state.error) return (
+      <View
+        style={[
+          this.props.style,
+          styles.errorWrapper
+        ]}
+      >
+        <Animated.Image
+          {...this.props}
+          source={this.getImageSource()}
+          style={styles.errorImage}
+        />
+      </View>
+    )
+    const source = this.getImageSource()
     return (
       <View>
-        {(isLoading || (!placeholderSource && this.state.error)) && (
+        {isLoading &&
           <Animated.View
             style={[
               this.props.style,
@@ -255,10 +278,10 @@ export default class RnCachedImage extends Component {
               }
             ]}
           />
-        )}
-        <Animated.Image
+        }
+        {source && source.uri ? <Animated.Image
           {...this.props}
-          source={this.getImageSource()}
+          source={source}
           onLoadEnd={() => {
             if (this.props.shouldCachedImage) return
             this.onLoadEnded()
@@ -268,14 +291,17 @@ export default class RnCachedImage extends Component {
             this.onError()
           }}
           style={[this.props.style, { opacity: this.state.opacity }]}
-        />
+        /> : null}
       </View>
     )
   }
 
   getImageSource = () => {
-    if (this.state.error && this.props.placeholderSource) { return this.props.placeholderSource }
-    if (this.props.shouldCachedImage) { return { uri: 'file://' + this.state.path } }
-    return this.props.source
+    let source
+    if (this.state.error ) source = this.props.placeholderSource ? this.props.placeholderSource : require('./assets/error-placeholder.png')
+    else if (this.props.shouldCachedImage && this.state.path)
+      source = this.props.placeholderSource = { uri: 'file://' + this.state.path }
+    else source =  this.props.source
+    return source
   }
 }
