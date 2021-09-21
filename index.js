@@ -20,7 +20,6 @@ export default class RnCachedImage extends Component {
     }),
     sources: PropTypes.objectOf(Image.propTypes.source),
     preferredPixelRatio: PropTypes.number,
-    renderImageElement: PropTypes.func,
     onLoad: PropTypes.func,
     onError: PropTypes.func,
     placeholderSource: PropTypes.oneOfType([PropTypes.number, PropTypes.object]),

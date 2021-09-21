@@ -1,6 +1,6 @@
 {
   "name": "@ngnclht1102/rn-cached-image",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "React native cached image component",
   "main": "index.js",
   "scripts": {
@@ -11,29 +11,13 @@
     "url": "git+https://github.com/ngnclht1102/rn-cached-image.git"
   },
   "keywords": [
-    "fast",
-    "image",
-    "react",
-    "native",
-    "image",
-    "cached",
-    "image",
-    "react",
-    "native",
-    "fast",
-    "image",
-    "image",
-    "component",
-    "react",
-    "native",
-    "rn",
-    "cached",
-    "image",
-    "rn",
-    "images"
+    "fast image",
+    "react native image",
+    "cached image",
+    "rn cached image"
   ],
   "author": "ngnclht1102 Brian",
-  "license": "ISC",
+  "license": "MIT",
   "bugs": {
     "url": "https://github.com/ngnclht1102/rn-cached-image/issues"
   },
