@@ -7,8 +7,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#e0e5e5'
   },
   errorImage: {
-    width: '30%',
-    height: '30%',
+    width: '40%',
+    height: '40%',
     resizeMode: 'contain'
   }
 })

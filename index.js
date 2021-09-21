@@ -44,7 +44,7 @@ export default class RnCachedImage extends Component {
     shouldCachedImage: false,
     immutableCachedImage: true,
     delay: 500,
-    maxAgeInHours: 168, // 7 days
+    maxAgeInHours: 72, // 3 days
     preferredPixelRatio: PixelRatio.get()
   };
 
