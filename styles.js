@@ -4,10 +4,11 @@ const styles = StyleSheet.create({
   errorWrapper: {
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#c1c1c1'
+    backgroundColor: '#e0e5e5'
   },
   errorImage: {
     width: '30%',
+    height: '30%',
     resizeMode: 'contain'
   }
 })

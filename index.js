@@ -7,21 +7,22 @@
 import React, { Component } from 'react'
 import PropTypes from 'prop-types'
 import RNFetchBlob from 'react-native-fetch-blob'
-import { Animated, Image, View } from 'react-native'
+import { Animated, Image, View, PixelRatio } from 'react-native'
 import { cacheValid, getPath } from './utils'
 import animationTypes from './animation.type'
 import styles from './styles'
 
 export default class RnCachedImage extends Component {
   static propTypes = {
-    style: PropTypes.oneOfType([
-      PropTypes.number,
-      PropTypes.array,
-      PropTypes.object
-    ]),
+    ...Image.propTypes,
+    source: PropTypes.shape({
+      uri: PropTypes.string,
+    }),
+    sources: PropTypes.objectOf(Image.propTypes.source),
+    preferredPixelRatio: PropTypes.number,
+    renderImageElement: PropTypes.func,
     onLoad: PropTypes.func,
     onError: PropTypes.func,
-    source: PropTypes.oneOfType([PropTypes.number, PropTypes.object]),
     placeholderSource: PropTypes.oneOfType([PropTypes.number, PropTypes.object]),
     errorPlaceholderSource: PropTypes.oneOfType([PropTypes.number, PropTypes.object]),
     animationWhileLoading: PropTypes.bool, // if disable animation on load, it will show the placeholderSource on load
@@ -32,19 +33,39 @@ export default class RnCachedImage extends Component {
     immutableCachedImage: PropTypes.bool, // only applied when should cache image is enable
     delay: PropTypes.number, // increase the loading time by miliseconds
     reuseView: PropTypes.bool, // use only if you intergrate with recycle listview
-    maxAgeInHours: PropTypes.number // max age of the cached file
+    maxAgeInHours: PropTypes.number, // max age of the cached file
   };
 
   static defaultProps = {
     animationWhileLoading: true,
     animationOnLoadEnd: true,
     animationOnLoadEndType: animationTypes.ANIM_TYPE_SHRINK,
-    placeholderColor: 'gray',
+    placeholderColor: '#e0e5e5',
     shouldCachedImage: false,
     immutableCachedImage: true,
     delay: 500,
-    maxAgeInHours: 168 // 7 days
+    maxAgeInHours: 168, // 7 days
+    preferredPixelRatio: PixelRatio.get()
   };
+
+  static getClosestHighQualitySource(sources, preferredPixelRatio) {
+    let pixelRatios = Object.keys(sources);
+    if (!pixelRatios.length) {
+      return null;
+    }
+
+    pixelRatios.sort((ratioA, ratioB) =>
+      parseFloat(ratioA) - parseFloat(ratioB)
+    );
+    for (let ii = 0; ii < pixelRatios.length; ii++) {
+      if (pixelRatios[ii] >= preferredPixelRatio) {
+        return sources[pixelRatios[ii]];
+      }
+    }
+
+    let largestPixelRatio = pixelRatios[pixelRatios.length - 1];
+    return sources[largestPixelRatio];
+  }
 
   static getSize (...args) {
     return Image.getSize(...args)
@@ -62,17 +83,22 @@ export default class RnCachedImage extends Component {
     }
 
     this.ended = false
-    this.imageExisted = false
+    this.cacheExisted = false
+    this.source = this.props.sources ? RnCachedImage.getClosestHighQualitySource(
+      this.props.sources,
+      this.props.preferredPixelRatio,
+    ) : null;
+    if (!this.source) this.source = this.props.source
   }
 
   componentDidMount () {
-    if (this.props.shouldCachedImage) { this.download() } else { this.startLoopAnimationForHolderSpinner() }
+    this.init()
   }
 
   // reset state from the beginning
   resetState = (callback) => {
     this.ended = false
-    this.imageExisted = false
+    this.cacheExisted = false
     this.setState({
       opacity: new Animated.Value(0),
       holderSpinnerOpacity: new Animated.Value(1),
@@ -85,12 +111,12 @@ export default class RnCachedImage extends Component {
   startLoopAnimationForHolderSpinner = () => {
     if (!this.state.isLoading || !this.props.animationWhileLoading) return
     Animated.timing(this.state.holderSpinnerOpacity, {
-      toValue: 0.4,
+      toValue: 0.25,
       duration: 400,
       useNativeDriver: true
     }).start(() => {
       Animated.timing(this.state.holderSpinnerOpacity, {
-        toValue: 0.9,
+        toValue: 0.5,
         duration: 500,
         useNativeDriver: true
       }).start(this.startLoopAnimationForHolderSpinner)
@@ -101,24 +127,29 @@ export default class RnCachedImage extends Component {
   // it just received new props and do some update instead
   componentWillReceiveProps (nextProps) {
     if (this.props.reuseView)
-      this.resetState(() => {
-        if (this.props.shouldCachedImage) {
-          this.download()
-        } else {
-          this.startLoopAnimationForHolderSpinner()
-        }
-      })
+      this.resetState(this.init)
+  }
+
+  init() {
+    if (this.props.shouldCachedImage) {
+      this.download()
+    } else {
+      if (!this.source || !this.source.uri)
+        this.setState({ error: true })
+      else
+        this.startLoopAnimationForHolderSpinner()
+    }
   }
 
   async download () {
-    const { uri } = this.props.source
-    if (!uri || uri == 'null') {
+    const { uri } = this.source
+    if (!uri) {
       this.onError()
       return
     }
     const path = getPath(uri, this.props.immutableCachedImage)
-    this.imageExisted = await cacheValid(path, this.props.maxAgeInHours)
-    if (!this.imageExisted) this.startLoopAnimationForHolderSpinner()
+    this.cacheExisted = await cacheValid(path, this.props.maxAgeInHours)
+    if (!this.cacheExisted) this.startLoopAnimationForHolderSpinner()
     else {
       console.log('[image caching] image existed', path)
       this.onDownloaded(path)
@@ -163,7 +194,7 @@ export default class RnCachedImage extends Component {
   };
 
   getOnLoadEndAnimation = () => {
-    const delay = this.imageExisted ? 0 : this.props.delay
+    const delay = this.cacheExisted ? 0 : this.props.delay
     switch (this.props.animationOnLoadEndType) {
       case animationTypes.ANIM_TYPE_FADE:
         return Animated.parallel([
@@ -249,6 +280,7 @@ export default class RnCachedImage extends Component {
   render () {
     const { isLoading, shouldCachedImage } = this.state
     const { placeholderSource, placeholderColor } = this.props
+    const source = this.getImageSource()
     if (this.state.error) return (
       <View
         style={[
@@ -256,18 +288,17 @@ export default class RnCachedImage extends Component {
           styles.errorWrapper
         ]}
       >
-        <Animated.Image
-          {...this.props}
-          source={this.getImageSource()}
+        <Image
+          source={source}
           style={styles.errorImage}
         />
       </View>
     )
-    const source = this.getImageSource()
+
     return (
       <View>
         {isLoading &&
-          <Animated.View
+          <Animated.Image
             style={[
               this.props.style,
               {
@@ -298,10 +329,11 @@ export default class RnCachedImage extends Component {
 
   getImageSource = () => {
     let source
-    if (this.state.error ) source = this.props.placeholderSource ? this.props.placeholderSource : require('./assets/error-placeholder.png')
+    if (this.state.error )
+      source = this.props.errorPlaceholderSource ? this.props.errorPlaceholderSource : require('./assets/error-placeholder.png')
     else if (this.props.shouldCachedImage && this.state.path)
-      source = this.props.placeholderSource = { uri: 'file://' + this.state.path }
-    else source =  this.props.source
+      source =  { uri: 'file://' + this.state.path }
+    else source =  this.source
     return source
   }
 }
